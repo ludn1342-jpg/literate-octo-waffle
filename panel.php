@@ -2,10 +2,10 @@
 declare(strict_types=1);
 
 // ============================================================
-// CONFIG — Todo vive en Render
+// CONFIG — Rutas apuntando a Render
 // ============================================================
-const BACKEND_DB      = __DIR__ . '/backend/storage/sites.db';
-const BACKEND_URL     = 'https://literate-octo-waffle-keau.onrender.com/backend/public';
+const BACKEND_DB       = __DIR__ . '/backend/storage/sites.db';
+const BACKEND_URL      = 'https://literate-octo-waffle-keau.onrender.com/backend/public'; // <-- URL de Render
 const GATEWAY_TEMPLATE = __DIR__ . '/gateway-template.php';
 
 // ============================================================
@@ -16,18 +16,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $white = trim($_POST['white'] ?? '');
         $money = trim($_POST['money'] ?? '');
 
-        if (!$white || !$money) throw new Exception('Faltan URLs');
-        foreach ([$white, $money] as $u) {
-            if (!filter_var($u, FILTER_VALIDATE_URL)) throw new Exception("URL inválida: $u");
+        if (!$white || !$money) {
+            throw new Exception('Faltan URLs');
         }
-        if ($white === $money) throw new Exception('White y Money deben ser distintas');
-        if (!is_file(GATEWAY_TEMPLATE)) throw new Exception('No se encuentra la plantilla: ' . GATEWAY_TEMPLATE);
+        foreach ([$white, $money] as $u) {
+            if (!filter_var($u, FILTER_VALIDATE_URL)) {
+                throw new Exception("URL inválida: $u");
+            }
+        }
+        if ($white === $money) {
+            throw new Exception('White y Money deben ser distintas');
+        }
+        if (!is_file(GATEWAY_TEMPLATE)) {
+            throw new Exception('No se encuentra la plantilla: ' . GATEWAY_TEMPLATE);
+        }
 
         // 1. Generar credenciales
-        $siteId = bin2hex(random_bytes(8));
-        $secret = bin2hex(random_bytes(32));
+        $siteId = bin2hex(random_bytes(8));   // 16 hex chars
+        $secret = bin2hex(random_bytes(32));  // 64 hex chars
 
-        // 2. Insertar en la BD (en Render)
+        // 2. Insertar en la BD del backend
         if (!is_dir(__DIR__ . '/backend/storage')) {
             mkdir(__DIR__ . '/backend/storage', 0755, true);
         }
@@ -35,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo = new PDO('sqlite:' . BACKEND_DB);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
-        // Crear la tabla si no existe (por si Render borró el archivo)
+        // Crear tablas si no existen (por si Render borró el archivo)
         $pdo->exec("CREATE TABLE IF NOT EXISTS sites (
             site_id TEXT PRIMARY KEY,
             secret TEXT NOT NULL,
@@ -44,11 +52,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            site_id TEXT NOT NULL,
+            ip TEXT,
+            ua TEXT,
+            action TEXT,
+            reason TEXT,
+            gclid TEXT
+        )");
 
         $pdo->prepare('INSERT INTO sites (site_id, secret, white_url, money_url) VALUES (?,?,?,?)')
             ->execute([$siteId, $secret, $white, $money]);
 
-        // 3. Cargar plantilla
+        // 3. Cargar plantilla y reemplazar placeholders
         $code = file_get_contents(GATEWAY_TEMPLATE);
         $code = str_replace(
             ['{{SITE_ID}}', '{{SITE_SECRET}}', '{{BACKEND_URL}}'],
@@ -56,11 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $code
         );
 
-        // 4. Enviar como descarga
+        // 4. Enviar como descarga directa
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="index.php"');
         header('Content-Length: ' . strlen($code));
         header('Cache-Control: no-store');
+        header('X-Site-Id: ' . $siteId);
         echo $code;
         exit;
 
@@ -96,7 +115,7 @@ button:disabled { background: #1f6feb44; cursor: wait; }
 <body>
 <div class="wrap">
 <h1>🕵️ Cloaker Generator</h1>
-<p class="subtitle">Genera el <code>index.php</code> para tu landing. Las URLs viven en Render, no en el archivo.</p>
+<p class="subtitle">Genera el <code>index.php</code> para tu landing. Las URLs viven en el backend, no en el archivo.</p>
 
 <?php if (!empty($error)): ?>
     <div class="error">❌ <?= htmlspecialchars($error) ?></div>
@@ -117,8 +136,8 @@ button:disabled { background: #1f6feb44; cursor: wait; }
         <strong>📦 Cómo usar:</strong><br>
         1. Pega las dos URLs arriba<br>
         2. Click en generar → se descarga <code>index.php</code><br>
-        3. Sube <code>index.php</code> a tu landing<br>
-        4. Listo. El archivo consulta al backend en Render.
+        3. Sube <code>index.php</code> a la raíz de tu dominio de landing<br>
+        4. Listo. El archivo no contiene URLs — solo un ID que consulta al backend
     </div>
 </div>
 </div>
