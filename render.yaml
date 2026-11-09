@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: cloaker-api
+    env: docker
+    plan: free
+    healthCheckPath: /
