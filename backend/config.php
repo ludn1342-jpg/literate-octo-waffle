@@ -23,11 +23,12 @@ return [
     'allowed_ips' => [],
 
     // Si usas Cloudflare, leer CF-Connecting-IP en lugar de REMOTE_ADDR
-    'behind_cf' => true,
+    // En Render NO usamos Cloudflare, por eso es false.
+    'behind_cf' => false,
 
     // Timeouts del fetch remoto (milisegundos)
-    'fetch_timeout_ms' => 2000,
-    'fetch_connect_ms' => 800,
+    'fetch_timeout_ms' => 3000,
+    'fetch_connect_ms' => 1500,
 
     // Clave admin para el endpoint admin_create.php (opcional)
     // Cámbiala por algo largo y aleatorio
